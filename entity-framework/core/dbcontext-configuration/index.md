@@ -280,11 +280,11 @@ The following table contains examples of common methods called on `DbContextOpti
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.EnableDetailedErrors%2A>       | More detailed query errors (at the expense of performance)  | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.ConfigureWarnings%2A>          | Ignore or throw for warnings and other events               | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.AddInterceptors%2A>            | Registers EF Core interceptors                              | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
-| <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseLazyLoadingProxies>               | Use dynamic proxies for lazy-loading                        | [_Lazy loading_)](xref:core/querying/related-data/lazy)
+| <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseLazyLoadingProxies%2A>            | Use dynamic proxies for lazy-loading                        | [_Lazy loading_)](xref:core/querying/related-data/lazy)
 | `UseChangeTrackingProxies()` <!-- Issue #2748 -->                                          | Use dynamic proxies for change-tracking                     | Coming soon...
 
 > [!NOTE]
-> <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseLazyLoadingProxies%2A> and <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseChangeTrackingProxies%2A> are extension methods from the [Microsoft.EntityFrameworkCore.Proxies](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore.Proxies/) NuGet package. This kind of ".UseSomething()" call is the recommended way to configure and/or use EF Core extensions contained in other packages.
+> <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseLazyLoadingProxies%2A> and `UseChangeTrackingProxies()` <!-- Issue #2748 --> are extension methods from the [Microsoft.EntityFrameworkCore.Proxies](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore.Proxies/) NuGet package. This kind of ".UseSomething()" call is the recommended way to configure and/or use EF Core extensions contained in other packages.
 
 ### `DbContextOptions` verses `DbContextOptions<TContext>`
 
