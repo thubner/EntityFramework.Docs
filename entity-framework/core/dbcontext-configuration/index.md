@@ -2,161 +2,361 @@
 title: Configuring a DbContext - EF Core
 description: Strategies for configuring DbContexts with Entity Framework Core
 author: ajcvickers
-ms.date: 10/27/2016
+ms.date: 11/07/2020
 uid: core/dbcontext-configuration/index
 ---
-# Configuring a DbContext
 
-This article shows basic patterns for configuring a `DbContext` via a `DbContextOptions` to connect to a database using a specific EF Core provider and optional behaviors.
+# DbContext lifetime, configuration and initialization
 
-## Design-time DbContext configuration
+This article shows basic patterns for initialization and configuration of a <xref:Microsoft.EntityFrameworkCore.DbContext> instance.
 
-EF Core design-time tools such as [migrations](xref:core/managing-schemas/migrations/index) need to be able to discover and create a working instance of a `DbContext` type in order to gather details about the application's entity types and how they map to a database schema. This process can be automatic as long as the tool can easily create the `DbContext` in such a way that it will be configured similarly to how it would be configured at run-time.
+## The DbContext lifetime
 
-While any pattern that provides the necessary configuration information to the `DbContext` can work at run-time, tools that require using a `DbContext` at design-time can only work with a limited number of patterns. These are covered in more detail in the [Design-Time Context Creation](xref:core/cli/dbcontext-creation) section.
+The lifetime of a `DbContext` begins when the instance is created and ends when the instance is [disposed](https://docs.microsoft.com/dotnet/standard/garbage-collection/unmanaged). A `DbContext` instance is designed to be used for a _single_ [unit-of-work](https://www.martinfowler.com/eaaCatalog/unitOfWork.html). This means that the lifetime of a `DbContext` instance is usually very short.
 
-## Configuring DbContextOptions
+> [!TIP] To quote Martin Fowler from the link above, "A Unit of Work keeps track of everything you do during a business transaction that can affect the database. When you're done, it figures out everything that needs to be done to alter the database as a result of your work."
 
-`DbContext` must have an instance of `DbContextOptions` in order to perform any work. The `DbContextOptions` instance carries configuration information such as:
+A typical unit-of-work when using Entity Framework Core (EF Core) involves:
 
-- The database provider to use, typically selected by invoking a method such as `UseSqlServer` or `UseSqlite`. These extension methods require the corresponding provider package, such as `Microsoft.EntityFrameworkCore.SqlServer` or `Microsoft.EntityFrameworkCore.Sqlite`. The methods are defined in the `Microsoft.EntityFrameworkCore` namespace.
-- Any necessary connection string or identifier of the database instance, typically passed as an argument to the provider selection method mentioned above
-- Any provider-level optional behavior selectors, typically also chained inside the call to the provider selection method
-- Any general EF Core behavior selectors, typically chained after or before the provider selector method
+- Creation of a `DbContext` instance
+- Tracking of entity instances by the context. Entities become tracked by
+  - Being [returned from a query](xref:core/saving/basic)
+  - Being [added or attached to the context](xref:core/saving/disconnected-entities)
+- Changes are made to the tracked entities as needed to implement the business rule
+- <xref:Microsoft.EntityFrameworkCore.DbContext.SaveChanges%2A> or <xref:Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync%2A> is called. EF Core detects the changes made and writes them to the database.
+- The `DbContext` instance is disposed
 
-The following example configures the `DbContextOptions` to use the SQL Server provider, a connection contained in the `connectionString` variable, a provider-level command timeout, and an EF Core behavior selector that makes all queries executed in the `DbContext` [no-tracking](xref:core/querying/tracking#no-tracking-queries) by default:
+> [!IMPORTANT]
+>
+> - It is very important to dispose the `DbContext` after use. This ensures both that any unmanaged resources are freed, and that any events or other hooks are unregistered so as to prevent memory leaks.
+> - `DbContext` is **not thread-safe**. Do not share contexts between threads. Make sure to `await` all async calls before continuing to use the context instance.
+> - An `InvalidOperationException` thrown by EF Core code can put the context into an unrecoverable state. Such exceptions indicate a program error and are not designed to be recovered from.
 
-```csharp
-optionsBuilder
-    .UseSqlServer(connectionString, providerOptions=>providerOptions.CommandTimeout(60))
-    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
-```
+## DbContext in dependency injection for ASP.NET Core
 
-> [!NOTE]
-> Provider selector methods and other behavior selector methods mentioned above are extension methods on `DbContextOptions` or provider-specific option classes. In order to have access to these extension methods you may need to have a namespace (typically `Microsoft.EntityFrameworkCore`) in scope and include additional package dependencies in the project.
+In many web applications, each HTTP request corresponds to a single unit-of-work. This makes tying the context lifetime to that of the request a good default for web applications.
 
-The `DbContextOptions` can be supplied to the `DbContext` by overriding the `OnConfiguring` method or externally via a constructor argument.
-
-If both are used, `OnConfiguring` is applied last and can overwrite options supplied to the constructor argument.
-
-### Constructor argument
-
-Your constructor can simply accept a `DbContextOptions` as follows:
-
-```csharp
-public class BloggingContext : DbContext
-{
-    public BloggingContext(DbContextOptions<BloggingContext> options)
-        : base(options)
-    { }
-
-    public DbSet<Blog> Blogs { get; set; }
-}
-```
-
-> [!TIP]
-> The base constructor of DbContext also accepts the non-generic version of `DbContextOptions`, but using the non-generic version is not recommended for applications with multiple context types.
-
-Your application can now pass the `DbContextOptions` when instantiating a context, as follows:
-
-```csharp
-var optionsBuilder = new DbContextOptionsBuilder<BloggingContext>();
-optionsBuilder.UseSqlite("Data Source=blog.db");
-
-using (var context = new BloggingContext(optionsBuilder.Options))
-{
-  // do stuff
-}
-```
-
-### OnConfiguring
-
-You can also initialize the `DbContextOptions` within the context itself. While you can use this technique for basic configuration, you will typically still need to get certain configuration details from the outside, e.g. a database connection string. This can be done with a configuration API or any other means.
-
-To initialize `DbContextOptions` within the context, override the `OnConfiguring` method and call the methods on the provided `DbContextOptionsBuilder`:
-
-```csharp
-public class BloggingContext : DbContext
-{
-    public DbSet<Blog> Blogs { get; set; }
-
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        optionsBuilder.UseSqlite("Data Source=blog.db");
-    }
-}
-```
-
-An application can simply instantiate such a context without passing anything to its constructor:
-
-```csharp
-using (var context = new BloggingContext())
-{
-  // do stuff
-}
-```
-
-> [!TIP]
-> This approach does not lend itself to testing, unless the tests target the full database.
-
-### Using DbContext with dependency injection
-
-EF Core supports using `DbContext` with a dependency injection container. Your DbContext type can be added to the service container by using the `AddDbContext<TContext>` method.
-
-`AddDbContext<TContext>` will make both your DbContext type, `TContext`, and the corresponding `DbContextOptions<TContext>` available for injection from the service container.
-
-See [more reading](#more-reading) below for additional information on dependency injection.
-
-Adding the `DbContext` to dependency injection:
+ASP.NET Core applications are [configured using dependency injection](https://docs.microsoft.com/aspnet/core/fundamentals/startup).  EF Core can be added to this configuration using <xref:Microsoft.Extensions.DependencyInjection.EntityFrameworkServiceCollectionExtensions.AddDbContext%2A> in the [`ConfigurureServices`](https://docs.microsoft.com/aspnet/core/fundamentals/startup#the-configureservices-method) method of `Startup.cs`. For example:
 
 ```csharp
 public void ConfigureServices(IServiceCollection services)
 {
-    services.AddDbContext<BloggingContext>(options => options.UseSqlite("Data Source=blog.db"));
+    // Other services code...
+    services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlServer("name=ConnectionStrings:DefaultConnection");
+    // Other services code...
 }
 ```
 
-This requires adding a [constructor argument](#constructor-argument) to your DbContext type that accepts `DbContextOptions<TContext>`.
+This example registers a `DbContext` subclass called `ApplicationDbContext` as a scoped service in the ASP.NET Core application service provider (a.k.a. the dependency injection container). The context is configured to use the SQL Server database provider and will read the connection string from ASP.NET Core configuration. It typically does not matter _where_ in `ConfigureServices` the call to `AddDbContext` is made.
 
-Context code:
+The `ApplicationDbContext` class must expose a public constructor with a `DbContextOptions<ApplicationDbContext>` parameter. This is how context configuration from `AddDbContext` is passed to the `DbContext`. For example:
 
 ```csharp
-public class BloggingContext : DbContext
+public class ApplicationDbContext : DbContext
 {
-    public BloggingContext(DbContextOptions<BloggingContext> options)
-      :base(options)
-    { }
-
-    public DbSet<Blog> Blogs { get; set; }
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> contextOptions)
+        : base(contextOptions)
+    {
+    }
 }
 ```
 
-Application code (in ASP.NET Core):
+`ApplicationDbContext` can then be used in ASP.NET Core controllers or other services through constructor injection. For example:
 
 ```csharp
 public class MyController
 {
-    private readonly BloggingContext _context;
+    private readonly ApplicationDbContext _context;
 
-    public MyController(BloggingContext context)
+    public MyController(ApplicationDbContext context)
     {
       _context = context;
     }
-
-    ...
 }
 ```
 
-Application code (using ServiceProvider directly, less common):
+The final result is an `ApplicationDbContext` instance created for each request and passed to the controller to perform a unit-of-work before being disposed when the request ends.
+
+Read further in this article to learn more about configuration options. In addition, see [App startup in ASP.NET Core](https://docs.microsoft.com/aspnet/core/fundamentals/startup) and [Dependency injection in ASP.NET Core](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection) for more information on configuration and dependency injection in ASP.NET Core.
+
+<!-- See also [_Using dependency injection_](TODO) for advanced dependency injection configuration with EF Core. -->
+
+## Simple DbContext initialization with 'new'
+
+`DbContext` instances can be constructed in the normal .NET way, for example with `new` in C#. Configuration can be performed by overriding the `OnConfiguring` method, or by passing options to the constructor. For example:
 
 ```csharp
-using (var context = serviceProvider.GetService<BloggingContext>())
+public class ApplicationDbContext : DbContext
 {
-  // do stuff
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=Test");
+    }
+}
+```
+
+This pattern also makes it easy to pass configuration like the connection string via the `DbContext` constructor. For example:
+
+```csharp
+public class ApplicationDbContext : DbContext
+{
+    private readonly string _connectionString;
+
+    public ApplicationDbContext(string connectionString)
+    {
+        _connectionString = connectionString;
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseSqlServer(_connectionString);
+    }
+}
+```
+
+Alternately, `DbContextOptionsBuilder` can be used to create a `DbContextOptions` object that is then passed to the `DbContext` constructor. This allows a `DbContext` configured for dependency injection to also be constructed explicitly. For example, when using `ApplicationDbContext` defined for ASP.NET Core web apps above:
+
+```csharp
+public class ApplicationDbContext : DbContext
+{
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> contextOptions)
+        : base(contextOptions)
+    {
+    }
+}
+```
+
+The `DbContextOptions` can be created and the constructor can be called explicitly:
+
+```csharp
+var contextOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
+    .UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=Test")
+    .Options;
+
+using var context = new ApplicationDbContext(contextOptions);
+```
+
+## Using a DbContext factory (e.g. for Blazor)
+
+Some application types (e.g. [ASP.NET Core Blazor](https://docs.microsoft.com/aspnet/core/blazor/)) use dependency injection but do not create a service scope that aligns with the desired `DbContext` lifetime. Even where such an alignment does exist, the application may need to perform multiple units-of-work within this scope--for example, multiple units-of-work within a single HTTP request.
+
+In these cases, `AddDbContextFactory<TContext>` <!-- Issue #2748 --> can be used to register a factory for creation of `DbContext` instances. For example:
+
+```csharp
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddDbContextFactory<ApplicationDbContext>(options =>
+        options.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=Test");
+}
+```
+
+This factory can then be used in other services through constructor injection. For example:
+
+```csharp
+public class MyController
+{
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+
+    public MyController(IDbContextFactory<ApplicationDbContext> contextFactory)
+    {
+        _contextFactory = contextFactory;
+    }
+}
+```
+
+The injected factory can then be used to construct DbContext instances in the service code. For example:
+
+```csharp
+public void DoSomeThing()
+{
+    using (var context = _contextFactory.CreateDbContext())
+    {
+        // ...
+    }
+}
+```
+
+Notice that the `DbContext` instances created in this way are **not** managed by the application's service provider and therefore must be disposed by the application.
+
+See [_ASP.NET Core Blazor Server with Entity Framework Core_](https://docs.microsoft.com/aspnet/core/blazor/blazor-server-ef-core) for more information on using EF Core with Blazor.
+
+## DbContextOptions
+
+The starting point for all `DbContext` configuration is <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder>. There are three ways to get this builder:
+
+- In `AddDbContext` and related methods
+- In `OnConfiguring`
+- Constructed explicitly with `new`
+
+Examples of each of these are shown in the preceding sections. The same configuration can be applied regardless of where the builder comes from. In addition, `OnConfiguring` is always called regardless of how the context is constructed. This means `OnConfiguring` can be used to perform additional configuration even when `AddDbContext` is being used.
+
+### Configuring the database provider
+
+Each `DbContext` instance must be configured to use one and only one database provider. (Different instances of a `DbContext` subtype can be used with different database providers, but a single instance must only use one.) A database provider is configured using a specific "UseProvider" call. For example, to use the SQL Server database provider:
+
+```csharp
+public class ApplicationDbContext : DbContext
+{
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=Test");
+    }
+}
+```
+
+These "UseProvider" methods are extension methods implemented by the database provider. This means that the database provider NuGet package must be installed before the extension method can be used.
+
+> [!TIP]
+> EF Core database providers make extensive use of [extension methods](https://docs.microsoft.com/dotnet/csharp/programming-guide/classes-and-structs/extension-methods). If the compiler indicates that a method cannot be found, then make sure that the provider's NuGet package is installed and that you have `using Microsoft.EntityFrameworkCore;` in your code.
+
+The following table contains examples for common database providers.
+
+| Database system              | Example configuration                         | NuGet package
+|:-----------------------------|-----------------------------------------------|--------------
+| SQL Server or Azure SQL      | `.UseSqlServer(connectionString)`             | [Microsoft.EntityFrameworkCore.SqlServer](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore.SqlServer/)
+| Azure Cosmos DB              | `.UseCosmos(connectionString, databaseName)`  | [Microsoft.EntityFrameworkCore.Cosmos](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore.Cosmos/)
+| SQLite                       | `.UseSqlite(connectionString)`                | [Microsoft.EntityFrameworkCore.Sqlite](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore.Sqlite/)
+| EF Core in-memory database   | `.UseInMemoryDatabase(databaseName)`          | [Microsoft.EntityFrameworkCore.InMemory](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore.InMemory/)
+| PostgreSQL*                  | `.UseNpgsql(connectionString)`                | [Npgsql.EntityFrameworkCore.PostgreSQL](https://www.nuget.org/packages/Npgsql.EntityFrameworkCore.PostgreSQL/)
+| MySQL/MariaDB*               | `.UseMySql((connectionString)`                | [Pomelo.EntityFrameworkCore.MySql](https://www.nuget.org/packages/Pomelo.EntityFrameworkCore.MySql/)
+| Oracle*                      | `.UseOracle(connectionString)`                | [Oracle.EntityFrameworkCore](https://www.nuget.org/packages/Oracle.EntityFrameworkCore/)
+
+*These database providers are not shipped by Microsoft. See [_Database providers_](xref:core/providers/index) for more information about database providers.
+
+> [!WARNING]
+> The EF Core in-memory database is not designed for production use. In addition, it may not be the best choice even for testing. See [_Testing code that uses EF Core_](xref:core/miscellaneous/testing/index) for more information.
+
+See [_Connection strings_](xref:core/miscellaneous/connection-strings) for more information on using connection strings with EF Core.
+
+Optional configuration specific to the database provider is performed in an additional provider-specific builder. For example, using <xref:Microsoft.EntityFrameworkCore.Infrastructure.SqlServerDbContextOptionsBuilder.EnableRetryOnFailure%2A> to configure retries for connection resiliency when connecting to Azure SQL:
+
+```csharp
+public class ApplicationDbContext : DbContext
+{
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder
+            .UseSqlServer(
+                @"Server=(localdb)\mssqllocaldb;Database=Test",
+                providerOptions =>
+                {
+                    providerOptions.EnableRetryOnFailure();
+                });
+    }
+}
+```
+
+> [!TIP]
+> The same database provider is used for SQL Server and Azure SQL. However, it is recommended that [connection resiliency](xref:core/miscellaneous/connection-resiliency) be used when connecting to SQL Azure.
+
+See [_Database providers_](xref:core/providers/index) for more information on provider-specific configuration.
+
+### Other DbContext configuration
+
+Other `DbContext` configuration can be chained either before or after (it makes no difference which) the "UseProvider" call. For example, to turn on sensitive-data logging:
+
+```csharp
+public class ApplicationDbContext : DbContext
+{
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder
+            .EnableSensitiveDataLogging()
+            .UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=Test");
+    }
+}
+```
+
+The following table contains examples of common methods called on `DbContextOptionsBuilder`.
+
+| DbContextOptionsBuilder method                                                          | What it does                                                | Learn more
+|:----------------------------------------------------------------------------------------|-------------------------------------------------------------|--------------
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.UseQueryTrackingBehavior>   | Sets the default tracking behavior for queries              | [_Query tracking behavior_](xref:core/querying/tracking)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.LogTo%2A>                   | A simple way to get EF Core logs (EF Core 5.0 and later)    | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.UseLoggerFactory>           | Registers an `Micrsofot.Extensions.Logging` factory         | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.EnableSensitiveDataLogging> | Includes application data in exceptions and logging         | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.EnableDetailedErrors>       | More detailed query errors (at the expense of performance)  | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.ConfigureWarnings>          | Ignore or throw for warnings and other events               | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.AddInterceptors%2A>         | Registers EF Core interceptors                              | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
+| <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseLazyLoadingProxies%2A>         | Use dynamic proxies for lazy-loading                        | [_Lazy loading_)](xref:core/querying/related-data/lazy)
+| <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseChangeTrackingProxies%2A>      | Use dynamic proxies for change-tracking                     | Coming soon...
+
+> [!NOTE]
+> <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseLazyLoadingProxies%2A> and <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseChangeTrackingProxies%2A> are extension methods from the [Microsoft.EntityFrameworkCore.Proxies](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore.Proxies/) NuGet package. This kind of ".UseSomething()" call is the recommended way to configure and/or use EF Core extensions contained in other packages.
+
+### `DbContextOptions` verses `DbContextOptions<TContext>`
+
+Most `DbContext` subclasses that accept a `DbContextOptions` should use the [generic](https://docs.microsoft.com/dotnet/csharp/programming-guide/generics/) `DbContextOptions<TContext>` variation. For example:
+
+```csharp
+public sealed class ApplicationDbContext : DbContext
+{
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> contextOptions)
+        : base(contextOptions)
+    {
+    }
+}
+```
+
+This ensures that the correct options for the specific `DbContext` subtype are resolved from dependency injection, even when multiple `DbContext` subtypes are registered.
+
+However, if the `DbContext` subtype is itself intended to be inherited from, then it should expose a protected constructor taking a non-generic `DbContextOptions`. For example:
+
+```csharp
+public abstract class ApplicationDbContextBase : DbContext
+{
+    protected ApplicationDbContextBase(DbContextOptions contextOptions)
+        : base(contextOptions)
+    {
+    }
+}
+```
+
+This allows multiple concrete subclasses to call this base constructor using their different generic `DbContextOptions<TContext>` instances. For example:
+
+```csharp
+public sealed class ApplicationDbContext1 : ApplicationDbContextBase
+{
+    public ApplicationDbContext1(DbContextOptions<ApplicationDbContext1> contextOptions)
+        : base(contextOptions)
+    {
+    }
 }
 
-var options = serviceProvider.GetService<DbContextOptions<BloggingContext>>();
+public sealed class ApplicationDbContext2 : ApplicationDbContextBase
+{
+    public ApplicationDbContext2(DbContextOptions<ApplicationDbContext2> contextOptions)
+        : base(contextOptions)
+    {
+    }
+}
 ```
+
+Notice that this is exactly the same pattern as when inheriting from `DbContext` directly. That is, the `DbContext` constructor itself accepts a non-generic `DbContextOptions` for this reason.
+
+A `DbContext` subclass intended to be both instantiated and inherited from should expose both forms of constructor. For example:
+
+```csharp
+public class ApplicationDbContext : DbContext
+{
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> contextOptions)
+        : base(contextOptions)
+    {
+    }
+
+    protected ApplicationDbContextBase(DbContextOptions contextOptions)
+        : base(contextOptions)
+    {
+    }
+}
+```
+
+## Design-time DbContext configuration
+
+EF Core design-time tools such as those for [EF Core migrations](xref:core/managing-schemas/migrations/index) need to be able to discover and create a working instance of a `DbContext` type in order to gather details about the application's entity types and how they map to a database schema. This process can be automatic as long as the tool can easily create the `DbContext` in such a way that it will be configured similarly to how it would be configured at run-time.
+
+While any pattern that provides the necessary configuration information to the `DbContext` can work at run-time, tools that require using a `DbContext` at design-time can only work with a limited number of patterns. These are covered in more detail in [_Design-time context creation_](xref:core/miscellaneous/cli/dbcontext-creation).
 
 ## Avoiding DbContext threading issues
 
