@@ -274,14 +274,14 @@ The following table contains examples of common methods called on `DbContextOpti
 | DbContextOptionsBuilder method                                                             | What it does                                                | Learn more
 |:-------------------------------------------------------------------------------------------|-------------------------------------------------------------|--------------
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.UseQueryTrackingBehavior%2A>   | Sets the default tracking behavior for queries              | [_Query tracking behavior_](xref:core/querying/tracking)
-| `LogTo` <!-- Issue #2748 -->                                                               | A simple way to get EF Core logs (EF Core 5.0 and later)    | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
+| `LogTo()` <!-- Issue #2748 -->                                                               | A simple way to get EF Core logs (EF Core 5.0 and later)    | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.UseLoggerFactory%2A>           | Registers an `Micrsofot.Extensions.Logging` factory         | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.EnableSensitiveDataLogging%2A> | Includes application data in exceptions and logging         | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.EnableDetailedErrors%2A>       | More detailed query errors (at the expense of performance)  | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.ConfigureWarnings%2A>          | Ignore or throw for warnings and other events               | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.AddInterceptors%2A>            | Registers EF Core interceptors                              | [_Logging, events, and diagnostics_](xref:core/miscellaneous/logging)
 | <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseLazyLoadingProxies>               | Use dynamic proxies for lazy-loading                        | [_Lazy loading_)](xref:core/querying/related-data/lazy)
-| `UseChangeTrackingProxies` <!-- Issue #2748 -->                                            | Use dynamic proxies for change-tracking                     | Coming soon...
+| `UseChangeTrackingProxies()` <!-- Issue #2748 -->                                          | Use dynamic proxies for change-tracking                     | Coming soon...
 
 > [!NOTE]
 > <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseLazyLoadingProxies%2A> and <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseChangeTrackingProxies%2A> are extension methods from the [Microsoft.EntityFrameworkCore.Proxies](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore.Proxies/) NuGet package. This kind of ".UseSomething()" call is the recommended way to configure and/or use EF Core extensions contained in other packages.
