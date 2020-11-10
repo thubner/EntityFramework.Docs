@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace WithNewAndArgs
 {
+    #region ApplicationDbContext
     public class ApplicationDbContext : DbContext
     {
         private readonly string _connectionString;
@@ -16,4 +17,5 @@ namespace WithNewAndArgs
             optionsBuilder.UseSqlServer(_connectionString);
         }
     }
+    #endregion
 }
