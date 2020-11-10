@@ -247,7 +247,7 @@ The following table contains examples for common database providers.
 *These database providers are not shipped by Microsoft. See [_Database Providers_](xref:core/providers/index) for more information about database providers.
 
 > [!WARNING]
-> The EF Core in-memory database is not designed for production use. In addition, it may not be the best choice even for testing. See [_Testing code that uses EF Core_](xref:core/miscellaneous/testing/index) for more information.
+> The EF Core in-memory database is not designed for production use. In addition, it may not be the best choice even for testing. See [_Testing code that uses EF Core_](xref:core/testing/index) for more information.
 
 See [_Connection Strings_](xref:core/miscellaneous/connection-strings) for more information on using connection strings with EF Core.
 
@@ -282,7 +282,7 @@ Other `DbContext` configuration can be chained either before or after (it makes 
 <!--
     public class ApplicationDbContext : DbContext
     {
-        protected override void OnConfiguring(DbContextOptionsBuilder<> optionsBuilder)
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             optionsBuilder
                 .EnableSensitiveDataLogging()
@@ -297,12 +297,12 @@ The following table contains examples of common methods called on `DbContextOpti
 | DbContextOptionsBuilder method                                                             | What it does                                                | Learn more
 |:-------------------------------------------------------------------------------------------|-------------------------------------------------------------|--------------
 | <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.UseQueryTrackingBehavior%2A>   | Sets the default tracking behavior for queries              | [_Query Tracking Behavior_](xref:core/querying/tracking)
-| `LogTo()` <!-- Issue #2748 -->                                                               | A simple way to get EF Core logs (EF Core 5.0 and later)    | [_Logging, Events, and Diagnostics_](xref:core/miscellaneous/logging)
-| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.UseLoggerFactory%2A>           | Registers an `Micrsofot.Extensions.Logging` factory         | [_Logging, Events, and Diagnostics_](xref:core/miscellaneous/logging)
-| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.EnableSensitiveDataLogging%2A> | Includes application data in exceptions and logging         | [_Logging, Events, and Diagnostics_](xref:core/miscellaneous/logging)
-| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.EnableDetailedErrors%2A>       | More detailed query errors (at the expense of performance)  | [_Logging, Events, and Diagnostics_](xref:core/miscellaneous/logging)
-| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.ConfigureWarnings%2A>          | Ignore or throw for warnings and other events               | [_Logging, Events, and Diagnostics_](xref:core/miscellaneous/logging)
-| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.AddInterceptors%2A>            | Registers EF Core interceptors                              | [_Logging, Events, and Diagnostics_](xref:core/miscellaneous/logging)
+| `LogTo()` <!-- Issue #2748 -->                                                               | A simple way to get EF Core logs (EF Core 5.0 and later)    | [_Logging, Events, and Diagnostics_](xref:core/logging-events-diagnostics/index)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.UseLoggerFactory%2A>           | Registers an `Micrsofot.Extensions.Logging` factory         | [_Logging, Events, and Diagnostics_](xref:core/logging-events-diagnostics/index)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.EnableSensitiveDataLogging%2A> | Includes application data in exceptions and logging         | [_Logging, Events, and Diagnostics_](xref:core/logging-events-diagnostics/index)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.EnableDetailedErrors%2A>       | More detailed query errors (at the expense of performance)  | [_Logging, Events, and Diagnostics_](xref:core/logging-events-diagnostics/index)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.ConfigureWarnings%2A>          | Ignore or throw for warnings and other events               | [_Logging, Events, and Diagnostics_](xref:core/logging-events-diagnostics/index)
+| <xref:Microsoft.EntityFrameworkCore.DbContextOptionsBuilder.AddInterceptors%2A>            | Registers EF Core interceptors                              | [_Logging, Events, and Diagnostics_](xref:core/logging-events-diagnostics/index)
 | <xref:Microsoft.EntityFrameworkCore.ProxiesExtensions.UseLazyLoadingProxies%2A>            | Use dynamic proxies for lazy-loading                        | [_Lazy Loading_)](xref:core/querying/related-data/lazy)
 | `UseChangeTrackingProxies()` <!-- Issue #2748 -->                                          | Use dynamic proxies for change-tracking                     | Coming soon...
 
@@ -387,7 +387,7 @@ A `DbContext` subclass intended to be both instantiated and inherited from shoul
 
 EF Core design-time tools such as those for [EF Core migrations](xref:core/managing-schemas/migrations/index) need to be able to discover and create a working instance of a `DbContext` type in order to gather details about the application's entity types and how they map to a database schema. This process can be automatic as long as the tool can easily create the `DbContext` in such a way that it will be configured similarly to how it would be configured at run-time.
 
-While any pattern that provides the necessary configuration information to the `DbContext` can work at run-time, tools that require using a `DbContext` at design-time can only work with a limited number of patterns. These are covered in more detail in [Design-Time Context Creation](xref:core/miscellaneous/cli/dbcontext-creation).
+While any pattern that provides the necessary configuration information to the `DbContext` can work at run-time, tools that require using a `DbContext` at design-time can only work with a limited number of patterns. These are covered in more detail in [Design-Time Context Creation](xref:core/cli/dbcontext-creation).
 
 ## Avoiding DbContext threading issues
 
